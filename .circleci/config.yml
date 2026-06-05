@@ -34,6 +34,11 @@ jobs:
             curl -LO "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
             chmod +x kubectl && sudo mv kubectl /usr/local/bin/
       - run:
+          name: Configure kubeconfig
+          command: |
+            mkdir -p ~/.kube
+            echo "$KUBECONFIG_DATA" | base64 --decode > ~/.kube/config
+      - run:
           name: Build and push Docker image
           command: |
             BRANCH=$(echo "$CIRCLE_BRANCH" | sed 's/\//-/g')
@@ -48,6 +53,7 @@ jobs:
           command: |
             sed -i 's/namespace: landmark/namespace: develop/g' k8s/*.yml
             sed -i "s|image: landmark-technologies:latest|image: previsetech/previselab-web-app:$IMAGE_TAG|g" k8s/app-deployment.yml
+            kubectl apply -f k8s/namespace.yml
             kubectl apply -f k8s/
 
   deploy-stg:
@@ -61,6 +67,11 @@ jobs:
           command: |
             curl -LO "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
             chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+      - run:
+          name: Configure kubeconfig
+          command: |
+            mkdir -p ~/.kube
+            echo "$KUBECONFIG_DATA" | base64 --decode > ~/.kube/config
       - run:
           name: Build and push Docker image
           command: |
@@ -76,6 +87,7 @@ jobs:
           command: |
             sed -i 's/namespace: landmark/namespace: staging/g' k8s/*.yml
             sed -i "s|image: landmark-technologies:latest|image: previsetech/previselab-web-app:$IMAGE_TAG|g" k8s/app-deployment.yml
+            kubectl apply -f k8s/namespace.yml
             kubectl apply -f k8s/
 
   deploy-prod:
@@ -89,6 +101,11 @@ jobs:
           command: |
             curl -LO "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
             chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+      - run:
+          name: Configure kubeconfig
+          command: |
+            mkdir -p ~/.kube
+            echo "$KUBECONFIG_DATA" | base64 --decode > ~/.kube/config
       - run:
           name: Build and push Docker image
           command: |
