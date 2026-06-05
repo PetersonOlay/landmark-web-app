@@ -39,8 +39,8 @@ jobs:
           name: Configure Kubernetes
           command: |
             kubectl config set-cluster self-managed --server=$KUBE_SERVER --insecure-skip-tls-verify=true
-            kubectl config set-credentials arc-runner-sa --token=$KUBE_TOKEN
-            kubectl config set-context arc-context --cluster=self-managed --user=arc-runner-sa
+            kubectl config set-credentials circleci-runner-sa --token=$KUBE_TOKEN
+            kubectl config set-context arc-context --cluster=self-managed --user=circleci-runner-sa
             kubectl config use-context arc-context
             kubectl cluster-info
       - run:
@@ -78,8 +78,8 @@ jobs:
           name: Configure Kubernetes
           command: |
             kubectl config set-cluster self-managed --server=$KUBE_SERVER --insecure-skip-tls-verify=true
-            kubectl config set-credentials arc-runner-sa --token=$KUBE_TOKEN
-            kubectl config set-context arc-context --cluster=self-managed --user=arc-runner-sa
+            kubectl config set-credentials circleci-runner-sa --token=$KUBE_TOKEN
+            kubectl config set-context arc-context --cluster=self-managed --user=circleci-runner-sa
             kubectl config use-context arc-context
             kubectl cluster-info
       - run:
@@ -117,8 +117,8 @@ jobs:
           name: Configure Kubernetes
           command: |
             kubectl config set-cluster self-managed --server=$KUBE_SERVER --insecure-skip-tls-verify=true
-            kubectl config set-credentials arc-runner-sa --token=$KUBE_TOKEN
-            kubectl config set-context arc-context --cluster=self-managed --user=arc-runner-sa
+            kubectl config set-credentials circleci-runner-sa --token=$KUBE_TOKEN
+            kubectl config set-context arc-context --cluster=self-managed --user=circleci-runner-sa
             kubectl config use-context arc-context
             kubectl cluster-info
       - run:
