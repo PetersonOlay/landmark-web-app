@@ -17,7 +17,7 @@ jobs:
           command: npm run build
       - run:
           name: Install server dependencies
-          command: cd server && npm ci
+          command: cd server && npm install
       - run:
           name: Run server tests
           command: cd server && npm test
