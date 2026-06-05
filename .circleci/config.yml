@@ -94,18 +94,21 @@ workflows:
     jobs:
       - test-and-build
       - deploy-dev:
+          context: develop
           requires:
             - test-and-build
           filters:
             branches:
               only: develop
       - deploy-stg:
+          context: staging
           requires:
             - test-and-build
           filters:
             branches:
               only: /^release.*/
       - deploy-prod:
+          context: production
           requires:
             - test-and-build
           filters:
