@@ -17,17 +17,23 @@
 #       protocol: TCP
 
 
-apiVersion: v1
-kind: Service
+apiVersion: networking.k8s.io/v1
+kind: Ingress
 metadata:
   name: landmark-app-lb
   namespace: landmark
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
 spec:
-  type: LoadBalancer
-  selector:
-    app: landmark-svc-demo    # must match your pod labels
-  ports:
-  - name: http
-    port: 80
-    targetPort: 5000  # your app port
-    protocol: TCP
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: landmark-app-service
+            port:
+              number: 80
