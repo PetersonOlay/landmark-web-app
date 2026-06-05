@@ -29,10 +29,12 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Install kubectl
+          name: Install kubectl & Tailscale
           command: |
             curl -LO "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
             chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+            curl -fsSL https://tailscale.com/install.sh | sh
+            sudo tailscale up --authkey=$TAILSCALE_AUTHKEY --accept-routes
       - run:
           name: Configure Kubernetes
           command: |
@@ -66,10 +68,12 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Install kubectl
+          name: Install kubectl & Tailscale
           command: |
             curl -LO "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
             chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+            curl -fsSL https://tailscale.com/install.sh | sh
+            sudo tailscale up --authkey=$TAILSCALE_AUTHKEY --accept-routes
       - run:
           name: Configure Kubernetes
           command: |
@@ -103,10 +107,12 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Install kubectl
+          name: Install kubectl & Tailscale
           command: |
             curl -LO "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
             chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+            curl -fsSL https://tailscale.com/install.sh | sh
+            sudo tailscale up --authkey=$TAILSCALE_AUTHKEY --accept-routes
       - run:
           name: Configure Kubernetes
           command: |
