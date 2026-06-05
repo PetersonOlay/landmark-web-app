@@ -36,17 +36,10 @@ jobs:
       - run:
           name: Configure Kubernetes
           command: |
-            if [ -z "$KUBECONFIG_DATA" ]; then
-              echo "Error: KUBECONFIG_DATA is not set!"
-              exit 1
-            fi
-            mkdir -p ~/.kube
-            if echo "$KUBECONFIG_DATA" | base64 --decode 2>/dev/null | grep -q "^apiVersion:"; then
-              echo "$KUBECONFIG_DATA" | base64 --decode > ~/.kube/config
-            else
-              printf '%s' "$KUBECONFIG_DATA" > ~/.kube/config
-            fi
-            chmod 600 ~/.kube/config
+            kubectl config set-cluster self-managed --server=$KUBE_SERVER --insecure-skip-tls-verify=true
+            kubectl config set-credentials arc-runner-sa --token=$KUBE_TOKEN
+            kubectl config set-context arc-context --cluster=self-managed --user=arc-runner-sa
+            kubectl config use-context arc-context
             kubectl cluster-info
       - run:
           name: Build and push Docker image
@@ -80,17 +73,10 @@ jobs:
       - run:
           name: Configure Kubernetes
           command: |
-            if [ -z "$KUBECONFIG_DATA" ]; then
-              echo "Error: KUBECONFIG_DATA is not set!"
-              exit 1
-            fi
-            mkdir -p ~/.kube
-            if echo "$KUBECONFIG_DATA" | base64 --decode 2>/dev/null | grep -q "^apiVersion:"; then
-              echo "$KUBECONFIG_DATA" | base64 --decode > ~/.kube/config
-            else
-              printf '%s' "$KUBECONFIG_DATA" > ~/.kube/config
-            fi
-            chmod 600 ~/.kube/config
+            kubectl config set-cluster self-managed --server=$KUBE_SERVER --insecure-skip-tls-verify=true
+            kubectl config set-credentials arc-runner-sa --token=$KUBE_TOKEN
+            kubectl config set-context arc-context --cluster=self-managed --user=arc-runner-sa
+            kubectl config use-context arc-context
             kubectl cluster-info
       - run:
           name: Build and push Docker image
@@ -124,17 +110,10 @@ jobs:
       - run:
           name: Configure Kubernetes
           command: |
-            if [ -z "$KUBECONFIG_DATA" ]; then
-              echo "Error: KUBECONFIG_DATA is not set!"
-              exit 1
-            fi
-            mkdir -p ~/.kube
-            if echo "$KUBECONFIG_DATA" | base64 --decode 2>/dev/null | grep -q "^apiVersion:"; then
-              echo "$KUBECONFIG_DATA" | base64 --decode > ~/.kube/config
-            else
-              printf '%s' "$KUBECONFIG_DATA" > ~/.kube/config
-            fi
-            chmod 600 ~/.kube/config
+            kubectl config set-cluster self-managed --server=$KUBE_SERVER --insecure-skip-tls-verify=true
+            kubectl config set-credentials arc-runner-sa --token=$KUBE_TOKEN
+            kubectl config set-context arc-context --cluster=self-managed --user=arc-runner-sa
+            kubectl config use-context arc-context
             kubectl cluster-info
       - run:
           name: Build and push Docker image
