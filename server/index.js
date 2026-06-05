@@ -44,15 +44,16 @@ app.get('/api/students', async (req, res) => {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
+
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // Only start server if not in test mode
 if (process.env.NODE_ENV !== 'test') {
-  connectDB().then(() => {
-    app.listen(5000, () => console.log('Server running on port 5000'));
-  });
+  app.listen(5000, () => console.log('Server running on port 5000'));
+  connectDB().catch(err => console.error('MongoDB connection error:', err));
 }
 
 module.exports = { app, connectDB, Student };
