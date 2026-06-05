@@ -38,6 +38,8 @@ jobs:
           command: |
             mkdir -p ~/.kube
             echo "$KUBECONFIG_DATA" | base64 --decode > ~/.kube/config
+            chmod 600 ~/.kube/config
+            kubectl cluster-info
       - run:
           name: Build and push Docker image
           command: |
@@ -72,6 +74,8 @@ jobs:
           command: |
             mkdir -p ~/.kube
             echo "$KUBECONFIG_DATA" | base64 --decode > ~/.kube/config
+            chmod 600 ~/.kube/config
+            kubectl cluster-info
       - run:
           name: Build and push Docker image
           command: |
@@ -106,6 +110,8 @@ jobs:
           command: |
             mkdir -p ~/.kube
             echo "$KUBECONFIG_DATA" | base64 --decode > ~/.kube/config
+            chmod 600 ~/.kube/config
+            kubectl cluster-info
       - run:
           name: Build and push Docker image
           command: |
