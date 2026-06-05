@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['**']
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run frontend tests
+        run: npm test
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Install server dependencies
+        run: cd server && npm ci
+
+      - name: Run server tests
+        run: cd server && npm test
+
+      - name: Generate image tag
+        id: tag
+        run: |
+          BRANCH=$(echo "${GITHUB_REF#refs/heads/}" | sed 's/\//-/g')
+          TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
+          echo "IMAGE_TAG=${BRANCH}-${TIMESTAMP}" >> $GITHUB_OUTPUT
+
+      - name: Docker build (validate)
+        run: docker build -t chafah/landmark-web-app:${{ steps.tag.outputs.IMAGE_TAG }} .

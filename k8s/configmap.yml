@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: landmark
+data:
+  NODE_ENV: production
+  MONGO_HOST: mongo-service
+  MONGO_PORT: "27017"
+  MONGO_DB: landmark
