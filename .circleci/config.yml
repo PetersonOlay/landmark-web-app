@@ -41,7 +41,11 @@ jobs:
               exit 1
             fi
             mkdir -p ~/.kube
-            echo "$KUBECONFIG_DATA" | base64 --decode > ~/.kube/config
+            if echo "$KUBECONFIG_DATA" | base64 --decode 2>/dev/null | grep -q "^apiVersion:"; then
+              echo "$KUBECONFIG_DATA" | base64 --decode > ~/.kube/config
+            else
+              printf '%s' "$KUBECONFIG_DATA" > ~/.kube/config
+            fi
             chmod 600 ~/.kube/config
             kubectl cluster-info
       - run:
@@ -81,7 +85,11 @@ jobs:
               exit 1
             fi
             mkdir -p ~/.kube
-            echo "$KUBECONFIG_DATA" | base64 --decode > ~/.kube/config
+            if echo "$KUBECONFIG_DATA" | base64 --decode 2>/dev/null | grep -q "^apiVersion:"; then
+              echo "$KUBECONFIG_DATA" | base64 --decode > ~/.kube/config
+            else
+              printf '%s' "$KUBECONFIG_DATA" > ~/.kube/config
+            fi
             chmod 600 ~/.kube/config
             kubectl cluster-info
       - run:
@@ -121,7 +129,11 @@ jobs:
               exit 1
             fi
             mkdir -p ~/.kube
-            echo "$KUBECONFIG_DATA" | base64 --decode > ~/.kube/config
+            if echo "$KUBECONFIG_DATA" | base64 --decode 2>/dev/null | grep -q "^apiVersion:"; then
+              echo "$KUBECONFIG_DATA" | base64 --decode > ~/.kube/config
+            else
+              printf '%s' "$KUBECONFIG_DATA" > ~/.kube/config
+            fi
             chmod 600 ~/.kube/config
             kubectl cluster-info
       - run:
