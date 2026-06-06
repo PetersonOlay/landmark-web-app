@@ -56,11 +56,12 @@ jobs:
       - run:
           name: Deploy to Kubernetes (develop namespace)
           command: |
+            CLUSTER_IP=$(echo $KUBE_SERVER | sed 's|https://||' | cut -d: -f1)
             sed -i 's/name: landmark/name: develop/g' k8s/namespace.yml
             kubectl apply -f k8s/namespace.yml
             sed -i 's/namespace: landmark/namespace: develop/g' k8s/*.yml
             sed -i "s|image: previsetech/previselab-web-app:.*|image: previsetech/previselab-web-app:$IMAGE_TAG|g" k8s/app-deployment.yml
-            sed -i "s|INGRESS_HOST|$INGRESS_HOST|g" k8s/ingress.yml
+            sed -i "s|INGRESS_HOST|develop.${CLUSTER_IP}.nip.io|g" k8s/ingress.yml
             kubectl wait --for=jsonpath='{.status.phase}'=Active namespace/develop --timeout=30s
             kubectl apply -f k8s/
 
@@ -98,11 +99,12 @@ jobs:
       - run:
           name: Deploy to Kubernetes (staging namespace)
           command: |
+            CLUSTER_IP=$(echo $KUBE_SERVER | sed 's|https://||' | cut -d: -f1)
             sed -i 's/name: landmark/name: staging/g' k8s/namespace.yml
             kubectl apply -f k8s/namespace.yml
             sed -i 's/namespace: landmark/namespace: staging/g' k8s/*.yml
             sed -i "s|image: previsetech/previselab-web-app:.*|image: previsetech/previselab-web-app:$IMAGE_TAG|g" k8s/app-deployment.yml
-            sed -i "s|INGRESS_HOST|$INGRESS_HOST|g" k8s/ingress.yml
+            sed -i "s|INGRESS_HOST|staging.${CLUSTER_IP}.nip.io|g" k8s/ingress.yml
             kubectl wait --for=jsonpath='{.status.phase}'=Active namespace/staging --timeout=30s
             kubectl apply -f k8s/
 
@@ -140,11 +142,12 @@ jobs:
       - run:
           name: Deploy to Kubernetes (production namespace)
           command: |
+            CLUSTER_IP=$(echo $KUBE_SERVER | sed 's|https://||' | cut -d: -f1)
             sed -i 's/name: landmark/name: production/g' k8s/namespace.yml
             kubectl apply -f k8s/namespace.yml
             sed -i 's/namespace: landmark/namespace: production/g' k8s/*.yml
             sed -i "s|image: previsetech/previselab-web-app:.*|image: previsetech/previselab-web-app:$IMAGE_TAG|g" k8s/app-deployment.yml
-            sed -i "s|INGRESS_HOST|$INGRESS_HOST|g" k8s/ingress.yml
+            sed -i "s|INGRESS_HOST|${CLUSTER_IP}.nip.io|g" k8s/ingress.yml
             kubectl wait --for=jsonpath='{.status.phase}'=Active namespace/production --timeout=30s
             kubectl apply -f k8s/
 
