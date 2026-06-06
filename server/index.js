@@ -9,9 +9,21 @@ app.use(express.json());
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://mongo:27017/landmark';
 
-const connectDB = async () => {
-  await mongoose.connect(MONGO_URI);
-  console.log('MongoDB connected');
+const connectDB = async (retries = 5, delay = 5000) => {
+  for (let i = 1; i <= retries; i++) {
+    try {
+      await mongoose.connect(MONGO_URI, {
+        serverSelectionTimeoutMS: 5000,
+        socketTimeoutMS: 45000,
+      });
+      console.log('MongoDB connected');
+      return;
+    } catch (err) {
+      console.error(`MongoDB connection attempt ${i}/${retries} failed: ${err.message}`);
+      if (i < retries) await new Promise(r => setTimeout(r, delay));
+    }
+  }
+  console.error('MongoDB failed to connect after all retries');
 };
 
 const StudentSchema = new mongoose.Schema({
@@ -38,8 +50,12 @@ app.post('/api/signup', async (req, res) => {
 });
 
 app.get('/api/students', async (req, res) => {
-  const students = await Student.find().sort({ createdAt: -1 });
-  res.json(students);
+  try {
+    const students = await Student.find().sort({ createdAt: -1 });
+    res.json(students);
+  } catch (err) {
+    res.status(503).json({ error: 'Database unavailable', detail: err.message });
+  }
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
