@@ -23,7 +23,8 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-  - http:
+  - host: INGRESS_HOST
+    http:
       paths:
       - path: /
         pathType: Prefix
