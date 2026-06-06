@@ -19,8 +19,6 @@ spec:
           ports:
             - containerPort: 5000
           env:
-            - name: MONGO_URI
-              value: "mongodb://$(MONGO_USER):$(MONGO_PASS)@mongo-service:27017/landmark?authSource=admin"
             - name: MONGO_USER
               valueFrom:
                 secretKeyRef:
@@ -31,6 +29,8 @@ spec:
                 secretKeyRef:
                   name: mongo-secret
                   key: MONGO_INITDB_ROOT_PASSWORD
+            - name: MONGO_URI
+              value: "mongodb://$(MONGO_USER):$(MONGO_PASS)@mongo-service:27017/landmark?authSource=admin"
             - name: NODE_ENV
               valueFrom:
                 configMapKeyRef:
