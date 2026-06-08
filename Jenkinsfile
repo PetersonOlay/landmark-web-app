@@ -7,7 +7,6 @@ pipeline {
         TAILSCALE_AUTHKEY  = credentials('tailscale-authkey')
         KUBE_SERVER        = credentials('kube-server')
         KUBE_TOKEN         = credentials('kube-token')
-        TAILSCALE_NODE_IP  = credentials('tailscale-node-ip')
     }
     stages {
         stage('Checkout') {
@@ -68,7 +67,7 @@ pipeline {
                     kubectl apply -f k8s/namespace.yml
                     sed -i 's/namespace: landmark/namespace: develop/g' k8s/*.yml
                     sed -i "s|image: ${DOCKER_REPO}:.*|image: ${DOCKER_REPO}:${IMAGE_TAG}|g" k8s/app-deployment.yml
-                    sed -i "s|INGRESS_HOST|develop.${TAILSCALE_NODE_IP}.nip.io|g" k8s/ingress.yml
+                    sed -i "s|INGRESS_HOST|develop.cobia-codlet.ts.net|g" k8s/ingress.yml
                     kubectl wait --for=jsonpath='{.status.phase}'=Active namespace/develop --timeout=30s
                     CURRENT_SC=\$(kubectl get pvc mongo-pvc -n develop -o jsonpath='{.spec.storageClassName}' 2>/dev/null || echo "")
                     if [ -n "\$CURRENT_SC" ] && [ "\$CURRENT_SC" != "local-path" ]; then
@@ -98,7 +97,7 @@ pipeline {
                     kubectl apply -f k8s/namespace.yml
                     sed -i 's/namespace: landmark/namespace: staging/g' k8s/*.yml
                     sed -i "s|image: ${DOCKER_REPO}:.*|image: ${DOCKER_REPO}:${IMAGE_TAG}|g" k8s/app-deployment.yml
-                    sed -i "s|INGRESS_HOST|staging.${TAILSCALE_NODE_IP}.nip.io|g" k8s/ingress.yml
+                    sed -i "s|INGRESS_HOST|staging.cobia-codlet.ts.net|g" k8s/ingress.yml
                     kubectl wait --for=jsonpath='{.status.phase}'=Active namespace/staging --timeout=30s
                     CURRENT_SC=\$(kubectl get pvc mongo-pvc -n staging -o jsonpath='{.spec.storageClassName}' 2>/dev/null || echo "")
                     if [ -n "\$CURRENT_SC" ] && [ "\$CURRENT_SC" != "local-path" ]; then
@@ -133,7 +132,7 @@ pipeline {
                     kubectl apply -f k8s/namespace.yml
                     sed -i 's/namespace: landmark/namespace: production/g' k8s/*.yml
                     sed -i "s|image: ${DOCKER_REPO}:.*|image: ${DOCKER_REPO}:${IMAGE_TAG}|g" k8s/app-deployment.yml
-                    sed -i "s|INGRESS_HOST|${TAILSCALE_NODE_IP}.nip.io|g" k8s/ingress.yml
+                    sed -i "s|INGRESS_HOST|production.cobia-codlet.ts.net|g" k8s/ingress.yml
                     kubectl wait --for=jsonpath='{.status.phase}'=Active namespace/production --timeout=30s
                     CURRENT_SC=\$(kubectl get pvc mongo-pvc -n production -o jsonpath='{.spec.storageClassName}' 2>/dev/null || echo "")
                     if [ -n "\$CURRENT_SC" ] && [ "\$CURRENT_SC" != "local-path" ]; then

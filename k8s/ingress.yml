@@ -19,9 +19,12 @@ metadata:
   name: landmark-app-ingress
   namespace: landmark
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
+    tailscale.com/proxy-group: ingress-proxies
 spec:
-  ingressClassName: nginx
+  ingressClassName: tailscale
+  tls:
+    - hosts:
+        - INGRESS_HOST
   rules:
   - host: INGRESS_HOST
     http:
