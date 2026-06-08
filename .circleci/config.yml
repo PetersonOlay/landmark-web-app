@@ -150,7 +150,7 @@ jobs:
             docker push previsetech/previselab-web-app:$IMAGE_TAG
             echo "export IMAGE_TAG=$IMAGE_TAG" >> $BASH_ENV
       - run:
-          name: Deploy to Kubernetes (production namespace)
+          name: Deploy to Kubernetes (production namespace and service)
           command: |
             CLUSTER_IP=$TAILSCALE_NODE_IP
             sed -i 's/name: landmark/name: production/g' k8s/namespace.yml
