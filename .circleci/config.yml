@@ -63,6 +63,11 @@ jobs:
             sed -i "s|image: previsetech/previselab-web-app:.*|image: previsetech/previselab-web-app:$IMAGE_TAG|g" k8s/app-deployment.yml
             sed -i "s|INGRESS_HOST|develop.${CLUSTER_IP}.nip.io|g" k8s/ingress.yml
             kubectl wait --for=jsonpath='{.status.phase}'=Active namespace/develop --timeout=30s
+            CURRENT_SC=$(kubectl get pvc mongo-pvc -n develop -o jsonpath='{.spec.storageClassName}' 2>/dev/null || echo "")
+            if [ -n "$CURRENT_SC" ] && [ "$CURRENT_SC" != "local-path" ]; then
+              kubectl delete deployment mongo -n develop --ignore-not-found
+              kubectl delete pvc mongo-pvc -n develop
+            fi
             kubectl apply -f k8s/
 
   deploy-stg:
@@ -106,6 +111,11 @@ jobs:
             sed -i "s|image: previsetech/previselab-web-app:.*|image: previsetech/previselab-web-app:$IMAGE_TAG|g" k8s/app-deployment.yml
             sed -i "s|INGRESS_HOST|staging.${CLUSTER_IP}.nip.io|g" k8s/ingress.yml
             kubectl wait --for=jsonpath='{.status.phase}'=Active namespace/staging --timeout=30s
+            CURRENT_SC=$(kubectl get pvc mongo-pvc -n staging -o jsonpath='{.spec.storageClassName}' 2>/dev/null || echo "")
+            if [ -n "$CURRENT_SC" ] && [ "$CURRENT_SC" != "local-path" ]; then
+              kubectl delete deployment mongo -n staging --ignore-not-found
+              kubectl delete pvc mongo-pvc -n staging
+            fi
             kubectl apply -f k8s/
 
   deploy-prod:
@@ -149,6 +159,11 @@ jobs:
             sed -i "s|image: previsetech/previselab-web-app:.*|image: previsetech/previselab-web-app:$IMAGE_TAG|g" k8s/app-deployment.yml
             sed -i "s|INGRESS_HOST|${CLUSTER_IP}.nip.io|g" k8s/ingress.yml
             kubectl wait --for=jsonpath='{.status.phase}'=Active namespace/production --timeout=30s
+            CURRENT_SC=$(kubectl get pvc mongo-pvc -n production -o jsonpath='{.spec.storageClassName}' 2>/dev/null || echo "")
+            if [ -n "$CURRENT_SC" ] && [ "$CURRENT_SC" != "local-path" ]; then
+              kubectl delete deployment mongo -n production --ignore-not-found
+              kubectl delete pvc mongo-pvc -n production
+            fi
             kubectl apply -f k8s/
 
 workflows:
