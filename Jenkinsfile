@@ -37,7 +37,9 @@ pipeline {
         stage('Generate Image Tag') {
             steps {
                 script {
-                    def rawBranch = env.BRANCH_NAME ?: sh(script: 'git rev-parse --abbrev-ref HEAD', returnStdout: true).trim()
+                    def rawBranch = env.BRANCH_NAME \
+                        ?: env.GIT_BRANCH?.replaceAll('origin/', '') \
+                        ?: sh(script: 'git name-rev --name-only HEAD | sed "s|remotes/origin/||; s|~.*||"', returnStdout: true).trim()
                     env.GIT_BRANCH_NAME = rawBranch
                     env.IMAGE_TAG = "${rawBranch.replaceAll('/', '-')}-${new Date().format('yyyyMMdd-HHmmss')}"
                 }
