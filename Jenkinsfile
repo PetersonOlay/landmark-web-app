@@ -12,6 +12,18 @@ pipeline {
         stage('Checkout') {
             steps { checkout scm }
         }
+        stage('Setup Node.js') {
+            steps {
+                sh '''
+                    if ! command -v node > /dev/null 2>&1; then
+                        curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+                        sudo apt-get install -y nodejs
+                    fi
+                    node --version
+                    npm --version
+                '''
+            }
+        }
         stage('Install & Test') {
             steps {
                 sh 'npm ci'
