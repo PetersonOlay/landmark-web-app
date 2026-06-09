@@ -37,19 +37,17 @@ pipeline {
         stage('Generate Image Tag') {
             steps {
                 script {
-                    def branch = env.BRANCH_NAME.replaceAll('/', '-')
-                    def timestamp = new Date().format('yyyyMMdd-HHmmss')
-                    env.IMAGE_TAG = "${branch}-${timestamp}"
+                    def rawBranch = env.BRANCH_NAME ?: sh(script: 'git rev-parse --abbrev-ref HEAD', returnStdout: true).trim()
+                    env.GIT_BRANCH_NAME = rawBranch
+                    env.IMAGE_TAG = "${rawBranch.replaceAll('/', '-')}-${new Date().format('yyyyMMdd-HHmmss')}"
                 }
             }
         }
         stage('Docker Build & Push') {
             when {
-                anyOf {
-                    branch 'develop'
-                    branch pattern: 'release*', comparator: 'GLOB'
-                    branch 'main'
-                    branch pattern: 'hotfix*', comparator: 'GLOB'
+                expression {
+                    def b = env.GIT_BRANCH_NAME ?: ''
+                    return b == 'develop' || b == 'main' || b.startsWith('release') || b.startsWith('hotfix')
                 }
             }
             steps {
@@ -61,7 +59,7 @@ pipeline {
             }
         }
         stage('Deploy to Dev') {
-            when { branch 'develop' }
+            when { expression { env.GIT_BRANCH_NAME == 'develop' } }
             steps {
                 sh """
                     curl -LO "https://dl.k8s.io/release/\$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
@@ -91,7 +89,7 @@ pipeline {
             }
         }
         stage('Deploy to Staging') {
-            when { branch pattern: 'release*', comparator: 'GLOB' }
+            when { expression { env.GIT_BRANCH_NAME?.startsWith('release') } }
             steps {
                 sh """
                     curl -LO "https://dl.k8s.io/release/\$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
@@ -122,9 +120,9 @@ pipeline {
         }
         stage('Deploy to Production') {
             when {
-                anyOf {
-                    branch 'main'
-                    branch pattern: 'hotfix*', comparator: 'GLOB'
+                expression {
+                    def b = env.GIT_BRANCH_NAME ?: ''
+                    return b == 'main' || b.startsWith('hotfix')
                 }
             }
             steps {
