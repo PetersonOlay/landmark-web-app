@@ -1,3 +1,27 @@
+// @NonCPS: escapes CPS transformation so java.util.Date is never serialized
+@NonCPS
+def buildTimestamp() {
+    return new Date().format('yyyyMMdd-HHmmss')
+}
+
+// Installs kubectl + Tailscale and configures the jenkins-runner-sa kubeconfig.
+// Called once at the top of each deploy stage to avoid copy-paste across three stages.
+def deploySetup() {
+    sh """
+        curl -LO "https://dl.k8s.io/release/\$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+
+        curl -fsSL https://tailscale.com/install.sh | sh
+        sudo tailscale up --authkey=\$TAILSCALE_AUTHKEY --accept-routes
+
+        kubectl config set-cluster self-managed --server=\$KUBE_SERVER --insecure-skip-tls-verify=true
+        kubectl config set-credentials jenkins-runner-sa --token=\$KUBE_TOKEN
+        kubectl config set-context jenkins-context --cluster=self-managed --user=jenkins-runner-sa
+        kubectl config use-context jenkins-context
+        kubectl cluster-info
+    """
+}
+
 pipeline {
     agent any
 
@@ -16,6 +40,28 @@ pipeline {
         // Pull latest source from the configured SCM branch
         stage('Checkout') {
             steps { checkout scm }
+        }
+
+        // Enforce Git Flow rules for Pull Requests targeting the production branch
+        stage('Git Flow Guard') {
+            when {
+                // Evaluates when a Pull Request targets 'main'
+                changeRequest target: 'main'
+            }
+            steps {
+                script {
+                    def sourceBranch = env.CHANGE_BRANCH
+                    echo "Incoming Pull Request targeting 'main' from branch: ${sourceBranch}"
+
+                    if (sourceBranch.startsWith("release/") || sourceBranch.startsWith("hotfix/")) {
+                        echo "SUCCESS: '${sourceBranch}' is a valid source branch for production."
+                    } else {
+                        currentBuild.result = 'FAILURE'
+                        error("DEVOPS ERROR: Cannot merge '${sourceBranch}' directly into main. " +
+                              "Under Git Flow, main only accepts PRs from 'release/*' or 'hotfix/*' branches.")
+                    }
+                }
+            }
         }
 
         // Install Node.js 18 via nodesource if not already present on the agent
@@ -46,8 +92,9 @@ pipeline {
             steps { sh 'npm run build' }
         }
 
-        // Derive the branch name and generate a unique image tag (branch-timestamp)
-        // Falls back through: BRANCH_NAME (multibranch) → GIT_BRANCH (regular pipeline) → git name-rev (detached HEAD)
+        // Derive the branch name and generate a unique image tag (branch-timestamp).
+        // Falls back through: BRANCH_NAME (multibranch) → GIT_BRANCH (regular pipeline) → git name-rev (detached HEAD).
+        // Moved up so env.GIT_BRANCH_NAME is accurately set BEFORE 'when' evaluation blocks execute.
         stage('Generate Image Tag') {
             steps {
                 script {
@@ -55,7 +102,7 @@ pipeline {
                         ?: env.GIT_BRANCH?.replaceAll('origin/', '') \
                         ?: sh(script: 'git name-rev --name-only HEAD | sed "s|remotes/origin/||; s|~.*||"', returnStdout: true).trim()
                     env.GIT_BRANCH_NAME = rawBranch
-                    env.IMAGE_TAG = "${rawBranch.replaceAll('/', '-')}-${new Date().format('yyyyMMdd-HHmmss')}"
+                    env.IMAGE_TAG = "${rawBranch.replaceAll('/', '-')}-${buildTimestamp()}"
                 }
             }
         }
@@ -65,7 +112,7 @@ pipeline {
             when {
                 expression {
                     def b = env.GIT_BRANCH_NAME ?: ''
-                    return b == 'develop' || b == 'main' || b.startsWith('release') || b.startsWith('hotfix')
+                    return b == 'develop' || b == 'main' || b.startsWith('release/') || b.startsWith('hotfix/')
                 }
             }
             steps {
@@ -81,28 +128,15 @@ pipeline {
         stage('Deploy to Dev') {
             when { expression { env.GIT_BRANCH_NAME == 'develop' } }
             steps {
+                script { deploySetup() }
                 sh """
-                    # Install kubectl
-                    curl -LO "https://dl.k8s.io/release/\$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-                    chmod +x kubectl && sudo mv kubectl /usr/local/bin/
-
-                    # Connect to the private cluster via Tailscale VPN
-                    curl -fsSL https://tailscale.com/install.sh | sh
-                    sudo tailscale up --authkey=\$TAILSCALE_AUTHKEY --accept-routes
-
-                    # Configure kubectl to use the jenkins-runner-sa service account
-                    kubectl config set-cluster self-managed --server=\$KUBE_SERVER --insecure-skip-tls-verify=true
-                    kubectl config set-credentials jenkins-runner-sa --token=\$KUBE_TOKEN
-                    kubectl config set-context jenkins-context --cluster=self-managed --user=jenkins-runner-sa
-                    kubectl config use-context jenkins-context
-                    kubectl cluster-info
-
-                    # Substitute namespace, image tag, and ingress host in manifests
-                    sed -i 's/name: landmark/name: develop/g' k8s/namespace.yml
-                    kubectl apply -f k8s/namespace.yml
-                    sed -i 's/namespace: landmark/namespace: develop/g' k8s/*.yml
-                    sed -i "s|image: ${DOCKER_REPO}:.*|image: ${DOCKER_REPO}:${IMAGE_TAG}|g" k8s/app-deployment.yml
-                    sed -i "s|INGRESS_HOST|develop.cobia-codlet.ts.net|g" k8s/ingress.yml
+                    # Patch manifests in a temp copy so workspace originals stay clean for future runs
+                    rm -rf k8s-patched && cp -r k8s/ k8s-patched/
+                    sed -i 's/name: landmark/name: develop/g' k8s-patched/namespace.yml
+                    kubectl apply -f k8s-patched/namespace.yml
+                    sed -i 's/namespace: landmark/namespace: develop/g' k8s-patched/*.yml
+                    sed -i "s|image: ${DOCKER_REPO}:.*|image: ${DOCKER_REPO}:${IMAGE_TAG}|g" k8s-patched/app-deployment.yml
+                    sed -i "s|INGRESS_HOST|develop.cobia-codlet.ts.net|g" k8s-patched/ingress.yml
 
                     kubectl wait --for=jsonpath='{.status.phase}'=Active namespace/develop --timeout=30s
 
@@ -113,48 +147,33 @@ pipeline {
                       kubectl delete pvc mongo-pvc -n develop
                     fi
 
-                    kubectl apply -f k8s/
+                    kubectl apply -f k8s-patched/
                 """
             }
         }
 
         // Deploy to the staging namespace — triggered by release/* branches
         stage('Deploy to Staging') {
-            when { expression { env.GIT_BRANCH_NAME?.startsWith('release') } }
+            when { expression { env.GIT_BRANCH_NAME?.startsWith('release/') } }
             steps {
+                script { deploySetup() }
                 sh """
-                    # Install kubectl
-                    curl -LO "https://dl.k8s.io/release/\$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-                    chmod +x kubectl && sudo mv kubectl /usr/local/bin/
-
-                    # Connect to the private cluster via Tailscale VPN
-                    curl -fsSL https://tailscale.com/install.sh | sh
-                    sudo tailscale up --authkey=\$TAILSCALE_AUTHKEY --accept-routes
-
-                    # Configure kubectl to use the jenkins-runner-sa service account
-                    kubectl config set-cluster self-managed --server=\$KUBE_SERVER --insecure-skip-tls-verify=true
-                    kubectl config set-credentials jenkins-runner-sa --token=\$KUBE_TOKEN
-                    kubectl config set-context jenkins-context --cluster=self-managed --user=jenkins-runner-sa
-                    kubectl config use-context jenkins-context
-                    kubectl cluster-info
-
-                    # Substitute namespace, image tag, and ingress host in manifests
-                    sed -i 's/name: landmark/name: staging/g' k8s/namespace.yml
-                    kubectl apply -f k8s/namespace.yml
-                    sed -i 's/namespace: landmark/namespace: staging/g' k8s/*.yml
-                    sed -i "s|image: ${DOCKER_REPO}:.*|image: ${DOCKER_REPO}:${IMAGE_TAG}|g" k8s/app-deployment.yml
-                    sed -i "s|INGRESS_HOST|staging.cobia-codlet.ts.net|g" k8s/ingress.yml
+                    rm -rf k8s-patched && cp -r k8s/ k8s-patched/
+                    sed -i 's/name: landmark/name: staging/g' k8s-patched/namespace.yml
+                    kubectl apply -f k8s-patched/namespace.yml
+                    sed -i 's/namespace: landmark/namespace: staging/g' k8s-patched/*.yml
+                    sed -i "s|image: ${DOCKER_REPO}:.*|image: ${DOCKER_REPO}:${IMAGE_TAG}|g" k8s-patched/app-deployment.yml
+                    sed -i "s|INGRESS_HOST|staging.cobia-codlet.ts.net|g" k8s-patched/ingress.yml
 
                     kubectl wait --for=jsonpath='{.status.phase}'=Active namespace/staging --timeout=30s
 
-                    # Delete mongo PVC if storageClassName changed (immutable field)
                     CURRENT_SC=\$(kubectl get pvc mongo-pvc -n staging -o jsonpath='{.spec.storageClassName}' 2>/dev/null || echo "")
                     if [ -n "\$CURRENT_SC" ] && [ "\$CURRENT_SC" != "local-path" ]; then
                       kubectl delete deployment mongo -n staging --ignore-not-found
                       kubectl delete pvc mongo-pvc -n staging
                     fi
 
-                    kubectl apply -f k8s/
+                    kubectl apply -f k8s-patched/
                 """
             }
         }
@@ -164,43 +183,28 @@ pipeline {
             when {
                 expression {
                     def b = env.GIT_BRANCH_NAME ?: ''
-                    return b == 'main' || b.startsWith('hotfix')
+                    return b == 'main' || b.startsWith('hotfix/')
                 }
             }
             steps {
+                script { deploySetup() }
                 sh """
-                    # Install kubectl
-                    curl -LO "https://dl.k8s.io/release/\$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-                    chmod +x kubectl && sudo mv kubectl /usr/local/bin/
-
-                    # Connect to the private cluster via Tailscale VPN
-                    curl -fsSL https://tailscale.com/install.sh | sh
-                    sudo tailscale up --authkey=\$TAILSCALE_AUTHKEY --accept-routes
-
-                    # Configure kubectl to use the jenkins-runner-sa service account
-                    kubectl config set-cluster self-managed --server=\$KUBE_SERVER --insecure-skip-tls-verify=true
-                    kubectl config set-credentials jenkins-runner-sa --token=\$KUBE_TOKEN
-                    kubectl config set-context jenkins-context --cluster=self-managed --user=jenkins-runner-sa
-                    kubectl config use-context jenkins-context
-                    kubectl cluster-info
-
-                    # Substitute namespace, image tag, and ingress host in manifests
-                    sed -i 's/name: landmark/name: production/g' k8s/namespace.yml
-                    kubectl apply -f k8s/namespace.yml
-                    sed -i 's/namespace: landmark/namespace: production/g' k8s/*.yml
-                    sed -i "s|image: ${DOCKER_REPO}:.*|image: ${DOCKER_REPO}:${IMAGE_TAG}|g" k8s/app-deployment.yml
-                    sed -i "s|INGRESS_HOST|production.cobia-codlet.ts.net|g" k8s/ingress.yml
+                    rm -rf k8s-patched && cp -r k8s/ k8s-patched/
+                    sed -i 's/name: landmark/name: production/g' k8s-patched/namespace.yml
+                    kubectl apply -f k8s-patched/namespace.yml
+                    sed -i 's/namespace: landmark/namespace: production/g' k8s-patched/*.yml
+                    sed -i "s|image: ${DOCKER_REPO}:.*|image: ${DOCKER_REPO}:${IMAGE_TAG}|g" k8s-patched/app-deployment.yml
+                    sed -i "s|INGRESS_HOST|production.cobia-codlet.ts.net|g" k8s-patched/ingress.yml
 
                     kubectl wait --for=jsonpath='{.status.phase}'=Active namespace/production --timeout=30s
 
-                    # Delete mongo PVC if storageClassName changed (immutable field)
                     CURRENT_SC=\$(kubectl get pvc mongo-pvc -n production -o jsonpath='{.spec.storageClassName}' 2>/dev/null || echo "")
                     if [ -n "\$CURRENT_SC" ] && [ "\$CURRENT_SC" != "local-path" ]; then
                       kubectl delete deployment mongo -n production --ignore-not-found
                       kubectl delete pvc mongo-pvc -n production
                     fi
 
-                    kubectl apply -f k8s/
+                    kubectl apply -f k8s-patched/
                 """
             }
         }
