@@ -164,7 +164,7 @@ pipeline {
 
         // Deploy to the staging namespace — triggered by release/* branches
         stage('Deploy to Staging') {
-            when { expression { env.GIT_BRANCH_NAME?.startsWith('release/') } }
+            when { expression { env.GIT_BRANCH_NAME?.startsWith('release') } }
             steps {
                 // Connect to the cluster and configure kubectl
                 script { deploySetup() }
