@@ -1,11 +1,13 @@
-// @NonCPS: escapes CPS transformation so java.util.Date is never serialized
+// Returns the current timestamp as a formatted string.
+// Declared @NonCPS so java.util.Date is never held in a CPS-serializable pipeline context.
 @NonCPS
 def buildTimestamp() {
     return new Date().format('yyyyMMdd-HHmmss')
 }
 
-// Installs kubectl + Tailscale and configures the jenkins-runner-sa kubeconfig.
-// Called once at the top of each deploy stage to avoid copy-paste across three stages.
+// Installs kubectl, connects to the private cluster via Tailscale VPN,
+// and configures the jenkins-runner-sa kubeconfig context.
+// Shared across all three deploy stages to avoid repetition.
 def deploySetup() {
     sh """
         curl -LO "https://dl.k8s.io/release/\$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
@@ -42,10 +44,11 @@ pipeline {
             steps { checkout scm }
         }
 
-        // Enforce Git Flow rules for Pull Requests targeting the production branch
+        // Enforce Git Flow rules for Pull Requests targeting the production branch.
+        // Fails the build early if the source branch is not 'release/*' or 'hotfix/*'.
         stage('Git Flow Guard') {
             when {
-                // Evaluates when a Pull Request targets 'main'
+                // Only evaluates when a Pull Request targets 'main'
                 changeRequest target: 'main'
             }
             steps {
@@ -78,7 +81,7 @@ pipeline {
             }
         }
 
-        // Install dependencies and run unit tests for frontend and server
+        // Install dependencies and run unit tests for both the frontend and the server
         stage('Install & Test') {
             steps {
                 sh 'npm ci'
@@ -92,9 +95,10 @@ pipeline {
             steps { sh 'npm run build' }
         }
 
-        // Derive the branch name and generate a unique image tag (branch-timestamp).
-        // Falls back through: BRANCH_NAME (multibranch) → GIT_BRANCH (regular pipeline) → git name-rev (detached HEAD).
-        // Moved up so env.GIT_BRANCH_NAME is accurately set BEFORE 'when' evaluation blocks execute.
+        // Derive the branch name and generate a unique image tag in the form <branch>-<timestamp>.
+        // Falls back through: BRANCH_NAME (multibranch pipeline) → GIT_BRANCH (standard pipeline)
+        // → git name-rev (detached HEAD / manually triggered builds).
+        // Placed before the deploy stages so env.GIT_BRANCH_NAME is set before any 'when' block evaluates.
         stage('Generate Image Tag') {
             steps {
                 script {
@@ -107,7 +111,8 @@ pipeline {
             }
         }
 
-        // Build and push Docker image to Docker Hub — runs on deployable branches only
+        // Build the Docker image and push it to Docker Hub.
+        // Only runs on branches that will be deployed: develop, main, release/*, hotfix/*
         stage('Docker Build & Push') {
             when {
                 expression {
@@ -128,19 +133,24 @@ pipeline {
         stage('Deploy to Dev') {
             when { expression { env.GIT_BRANCH_NAME == 'develop' } }
             steps {
+                // Connect to the cluster and configure kubectl
                 script { deploySetup() }
                 sh """
-                    # Patch manifests in a temp copy so workspace originals stay clean for future runs
+                    # Copy manifests to a temp directory so the workspace originals stay clean.
+                    # This ensures the placeholder values are available on every pipeline run.
                     rm -rf k8s-patched && cp -r k8s/ k8s-patched/
+
+                    # Substitute namespace name, image tag, and ingress host in the copied manifests
                     sed -i 's/name: landmark/name: develop/g' k8s-patched/namespace.yml
                     kubectl apply -f k8s-patched/namespace.yml
                     sed -i 's/namespace: landmark/namespace: develop/g' k8s-patched/*.yml
                     sed -i "s|image: ${DOCKER_REPO}:.*|image: ${DOCKER_REPO}:${IMAGE_TAG}|g" k8s-patched/app-deployment.yml
                     sed -i "s|INGRESS_HOST|develop.cobia-codlet.ts.net|g" k8s-patched/ingress.yml
 
+                    # Wait for the namespace to become active before applying workloads
                     kubectl wait --for=jsonpath='{.status.phase}'=Active namespace/develop --timeout=30s
 
-                    # Delete mongo PVC if storageClassName changed (immutable field)
+                    # Delete the mongo PVC if its storageClassName has changed (immutable field)
                     CURRENT_SC=\$(kubectl get pvc mongo-pvc -n develop -o jsonpath='{.spec.storageClassName}' 2>/dev/null || echo "")
                     if [ -n "\$CURRENT_SC" ] && [ "\$CURRENT_SC" != "local-path" ]; then
                       kubectl delete deployment mongo -n develop --ignore-not-found
@@ -156,17 +166,23 @@ pipeline {
         stage('Deploy to Staging') {
             when { expression { env.GIT_BRANCH_NAME?.startsWith('release/') } }
             steps {
+                // Connect to the cluster and configure kubectl
                 script { deploySetup() }
                 sh """
+                    # Copy manifests to a temp directory so the workspace originals stay clean
                     rm -rf k8s-patched && cp -r k8s/ k8s-patched/
+
+                    # Substitute namespace name, image tag, and ingress host in the copied manifests
                     sed -i 's/name: landmark/name: staging/g' k8s-patched/namespace.yml
                     kubectl apply -f k8s-patched/namespace.yml
                     sed -i 's/namespace: landmark/namespace: staging/g' k8s-patched/*.yml
                     sed -i "s|image: ${DOCKER_REPO}:.*|image: ${DOCKER_REPO}:${IMAGE_TAG}|g" k8s-patched/app-deployment.yml
                     sed -i "s|INGRESS_HOST|staging.cobia-codlet.ts.net|g" k8s-patched/ingress.yml
 
+                    # Wait for the namespace to become active before applying workloads
                     kubectl wait --for=jsonpath='{.status.phase}'=Active namespace/staging --timeout=30s
 
+                    # Delete the mongo PVC if its storageClassName has changed (immutable field)
                     CURRENT_SC=\$(kubectl get pvc mongo-pvc -n staging -o jsonpath='{.spec.storageClassName}' 2>/dev/null || echo "")
                     if [ -n "\$CURRENT_SC" ] && [ "\$CURRENT_SC" != "local-path" ]; then
                       kubectl delete deployment mongo -n staging --ignore-not-found
@@ -187,17 +203,23 @@ pipeline {
                 }
             }
             steps {
+                // Connect to the cluster and configure kubectl
                 script { deploySetup() }
                 sh """
+                    # Copy manifests to a temp directory so the workspace originals stay clean
                     rm -rf k8s-patched && cp -r k8s/ k8s-patched/
+
+                    # Substitute namespace name, image tag, and ingress host in the copied manifests
                     sed -i 's/name: landmark/name: production/g' k8s-patched/namespace.yml
                     kubectl apply -f k8s-patched/namespace.yml
                     sed -i 's/namespace: landmark/namespace: production/g' k8s-patched/*.yml
                     sed -i "s|image: ${DOCKER_REPO}:.*|image: ${DOCKER_REPO}:${IMAGE_TAG}|g" k8s-patched/app-deployment.yml
                     sed -i "s|INGRESS_HOST|production.cobia-codlet.ts.net|g" k8s-patched/ingress.yml
 
+                    # Wait for the namespace to become active before applying workloads
                     kubectl wait --for=jsonpath='{.status.phase}'=Active namespace/production --timeout=30s
 
+                    # Delete the mongo PVC if its storageClassName has changed (immutable field)
                     CURRENT_SC=\$(kubectl get pvc mongo-pvc -n production -o jsonpath='{.spec.storageClassName}' 2>/dev/null || echo "")
                     if [ -n "\$CURRENT_SC" ] && [ "\$CURRENT_SC" != "local-path" ]; then
                       kubectl delete deployment mongo -n production --ignore-not-found
